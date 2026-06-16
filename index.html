@@ -1538,6 +1538,7 @@
             padding-bottom: 1rem;
             margin-bottom: 1rem;
             border-bottom: 1px solid #e0e0e0;
+            gap: 0.5rem;
         }
 
         .cart-item-name {
@@ -1694,7 +1695,10 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import {
+            getFirestore, collection, addDoc, setDoc, deleteDoc,
+            doc, getDocs, serverTimestamp, orderBy, query
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
 
         const firebaseConfig = {
@@ -1711,11 +1715,31 @@
         const analytics = getAnalytics(app);
         const db = getFirestore(app);
 
-        // Expose db to global scope for use in submitForm()
-        window._db = db;
-        window._firestoreAddDoc = addDoc;
+        // Expose everything to global scope
+        window._db                  = db;
+        window._firestoreAddDoc     = addDoc;
+        window._firestoreSetDoc     = setDoc;
+        window._firestoreDeleteDoc  = deleteDoc;
+        window._firestoreDoc        = doc;
         window._firestoreCollection = collection;
-        window._firestoreTimestamp = serverTimestamp;
+        window._firestoreGetDocs    = getDocs;
+        window._firestoreQuery      = query;
+        window._firestoreOrderBy    = orderBy;
+        window._firestoreTimestamp  = serverTimestamp;
+
+        // Load products from Firestore on startup
+        window._loadProductsFromFirestore = async function() {
+            try {
+                const q = query(collection(db, 'products'), orderBy('createdAt', 'asc'));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const loaded = [];
+                    snap.forEach(d => loaded.push({ _docId: d.id, ...d.data() }));
+                    return loaded;
+                }
+            } catch(e) { console.error('Firestore load error:', e); }
+            return null;
+        };
     </script>
 </head>
 <body>
@@ -1768,9 +1792,18 @@
     <div class="cart-footer">
         <p class="order-method-label">Order Method</p>
         <div class="order-method-btns">
-            <button class="method-btn selected" id="btn-delivery" onclick="setOrderMethod('Nationwide Delivery')">Nationwide</button>
+            <button class="method-btn selected" id="btn-delivery" onclick="setOrderMethod('Delivery')">Delivery</button>
             <button class="method-btn" id="btn-pickup" onclick="setOrderMethod('Pickup')">Pickup</button>
         </div>
+
+        <!-- Delivery Details Form -->
+        <div id="delivery-details" style="margin-bottom:1rem;">
+            <p style="font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;font-weight:600;margin-bottom:0.6rem;color:var(--dark);">Delivery Details</p>
+            <input id="d-name" type="text" placeholder="Full Name *" style="width:100%;border:1px solid var(--warm);padding:0.6rem 0.75rem;font-size:0.72rem;font-family:'DM Sans',sans-serif;margin-bottom:0.5rem;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#dddddd'">
+            <input id="d-number" type="tel" placeholder="Phone Number *" style="width:100%;border:1px solid var(--warm);padding:0.6rem 0.75rem;font-size:0.72rem;font-family:'DM Sans',sans-serif;margin-bottom:0.5rem;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#dddddd'">
+            <input id="d-location" type="text" placeholder="Delivery Location *" style="width:100%;border:1px solid var(--warm);padding:0.6rem 0.75rem;font-size:0.72rem;font-family:'DM Sans',sans-serif;margin-bottom:0;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#0a0a0a'" onblur="this.style.borderColor='#dddddd'">
+        </div>
+
         <div class="cart-total-row">
             <span class="cart-total-label">Total</span>
             <span class="cart-total-amount" id="cart-total">GH₵ 0</span>
@@ -1900,7 +1933,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <span class="footer-copy">© 2026 Above The Law. All rights reserved.</span>
+            <span class="footer-copy">© 2026 Above The Law. All rights reserved. · Made by <a href="https://www.ryderog.space" target="_blank" style="color:inherit;text-decoration:underline;text-underline-offset:3px;opacity:0.7;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">OG</a></span>
             <span class="footer-tagline">Modern Streetwear — Accra, Ghana</span>
         </div>
     </footer>
@@ -1914,7 +1947,7 @@
                 <p style="font-size:0.58rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--accent);margin-bottom:0.5rem;">ATL 2026</p>
                 <h1 class="page-title">The Collection</h1>
             </div>
-            <p class="page-subtitle">Each piece is personally sourced and inspected — authentic vintage with the quality you deserve.</p>
+            <p class="page-subtitle"></p>
         </div>
     </div>
 
@@ -1944,7 +1977,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <span class="footer-copy">© 2026 Above The Law. All rights reserved.</span>
+            <span class="footer-copy">© 2026 Above The Law. All rights reserved. · Made by <a href="https://www.ryderog.space" target="_blank" style="color:inherit;text-decoration:underline;text-underline-offset:3px;opacity:0.7;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">OG</a></span>
             <span class="footer-tagline">Modern Streetwear — Accra, Ghana</span>
         </div>
     </footer>
@@ -1959,7 +1992,7 @@
         <div class="about-content">
             <p class="about-eyebrow">Our Story</p>
             <h1 class="about-title">More Than Clothes —<br>It's a <em style="font-style:italic;color:var(--accent);">Legacy</em></h1>
-            <p class="about-body">Above The Law was born from a simple belief: the best clothes have already been made. Founded in Accra with a passion for fashion that transcends trends, we source and curate pieces that have stood the test of time.</p>
+            <p class="about-body">"Above The LAW" is more than just a brand; it's a statement. We are inspired by rebellion and nonconformity, celebrating individuality and the courage to defy expectations. Our focus is on empowering self-expression through bold designs, crafted with premium materials and an unwavering commitment to ethical production. We believe in creating a community where everyone feels free to be themselves, to defy expectations, forge your own path and to live life on their own terms.</p>
             <div class="about-quote">
                 "Every garment tells a story. We find the ones worth wearing again."
             </div>
@@ -2009,7 +2042,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <span class="footer-copy">© 2026 Above The Law. All rights reserved.</span>
+            <span class="footer-copy">© 2026 Above The Law. All rights reserved. · Made by <a href="https://www.ryderog.space" target="_blank" style="color:inherit;text-decoration:underline;text-underline-offset:3px;opacity:0.7;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">OG</a></span>
             <span class="footer-tagline">Modern Streetwear — Accra, Ghana</span>
         </div>
     </footer>
@@ -2113,7 +2146,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <span class="footer-copy">© 2026 Above The Law. All rights reserved.</span>
+            <span class="footer-copy">© 2026 Above The Law. All rights reserved. · Made by <a href="https://www.ryderog.space" target="_blank" style="color:inherit;text-decoration:underline;text-underline-offset:3px;opacity:0.7;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">OG</a></span>
             <span class="footer-tagline">Modern Streetwear — Accra, Ghana</span>
         </div>
     </footer>
@@ -2238,7 +2271,7 @@
     // ---- Cart ----
     let cart = [];
     let orderMethod = 'Delivery';
-    const WHATSAPP_NUMBER = "233204608631";
+    const WHATSAPP_NUMBER = "233533194307";
 
     function toggleCart() {
         const sidebar = document.getElementById('cart-sidebar');
@@ -2261,11 +2294,13 @@
 
     function setOrderMethod(method) {
         orderMethod = method;
-        document.getElementById('btn-delivery').classList.toggle('selected', method === 'Nationwide Delivery' || method === 'Delivery');
+        document.getElementById('btn-delivery').classList.toggle('selected', method === 'Delivery');
         document.getElementById('btn-pickup').classList.toggle('selected', method === 'Pickup');
+        const deliveryForm = document.getElementById('delivery-details');
+        deliveryForm.style.display = method === 'Delivery' ? 'block' : 'none';
     }
 
-    function addToCart(name, price, sizeId) {
+    function addToCart(name, price, sizeId, imageUrl) {
         const sizeSelect = document.getElementById(sizeId);
         const selectedSize = sizeSelect.value;
         if (!selectedSize) {
@@ -2276,7 +2311,7 @@
         if (existing) {
             existing.quantity += 1;
         } else {
-            cart.push({ name, price, size: selectedSize, quantity: 1 });
+            cart.push({ name, price, size: selectedSize, quantity: 1, imageUrl: imageUrl || '' });
         }
         updateCartUI();
         showToast(name + ' added to bag');
@@ -2293,9 +2328,13 @@
         } else {
             container.innerHTML = cart.map((item, i) => `
                 <div class="cart-item">
-                    <div>
+                    ${item.imageUrl ? `<a href="${item.imageUrl}" target="_blank" style="flex-shrink:0;display:block;width:54px;height:54px;border-radius:2px;overflow:hidden;border:1px solid #e0e0e0;margin-right:0.75rem;">
+                        <img src="${item.imageUrl}" style="width:100%;height:100%;object-fit:cover;" alt="${item.name}">
+                    </a>` : ''}
+                    <div style="flex:1;">
                         <p class="cart-item-name">${item.name} (${item.size})</p>
                         <p class="cart-item-details">GH₵ ${item.price} × ${item.quantity} = GH₵ ${item.price * item.quantity}</p>
+                        ${item.imageUrl ? `<a href="${item.imageUrl}" target="_blank" style="font-size:0.58rem;letter-spacing:0.1em;color:#888;text-decoration:underline;">View Image</a>` : ''}
                     </div>
                     <button class="cart-remove" onclick="removeFromCart(${i})">Remove</button>
                 </div>
@@ -2315,13 +2354,57 @@
 
     function checkoutWhatsApp() {
         if (cart.length === 0) { showToast('Your bag is empty!'); return; }
-        let msg = `Hello Above The Law! I'd like to place an order (*${orderMethod.toUpperCase()}*):%0A%0A`;
-        cart.forEach(item => {
-            msg += `- ${item.name} [Size: ${item.size}] (Qty: ${item.quantity}) - GH₵ ${item.price * item.quantity}%0A`;
-        });
+
+        let dName = '', dNumber = '', dLocation = '';
+        if (orderMethod === 'Delivery') {
+            dName     = document.getElementById('d-name').value.trim();
+            dNumber   = document.getElementById('d-number').value.trim();
+            dLocation = document.getElementById('d-location').value.trim();
+            if (!dName || !dNumber || !dLocation) {
+                showToast('Please fill in all delivery details');
+                ['d-name','d-number','d-location'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el.value.trim()) el.style.borderColor = '#e53935';
+                });
+                return;
+            }
+        }
+
         const total = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-        msg += `%0A*Total: GH₵ ${total}*%0AMethod: ${orderMethod}%0APlease let me know the next steps. Thank you!`;
-        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
+        const n = '\n';
+        const b = '*';
+
+        let msg = `Hello Above The Law!${n}I'd like to place an order.${n}${n}`;
+        msg += `${b}ORDER METHOD:${b} ${orderMethod.toUpperCase()}${n}`;
+        msg += `━━━━━━━━━━━━━━━━━━${n}`;
+
+        cart.forEach((item, idx) => {
+            msg += `${n}${b}Item ${idx + 1}:${b} ${item.name}${n}`;
+            msg += `  • Size: ${item.size}${n}`;
+            msg += `  • Qty: ${item.quantity}${n}`;
+            msg += `  • Price: GH₵ ${item.price} each${n}`;
+            msg += `  • Subtotal: GH₵ ${item.price * item.quantity}${n}`;
+            if (item.imageUrl) {
+                // Break the URL with a zero-width space after https:// so WhatsApp
+                // treats it as tappable text but does NOT auto-load a preview
+                const safeUrl = item.imageUrl.replace('https://', 'https://\u200B');
+                msg += `  • View item: ${safeUrl}${n}`;
+            }
+        });
+
+        msg += `${n}━━━━━━━━━━━━━━━━━━${n}`;
+        msg += `${b}TOTAL: GH₵ ${total}${b}${n}`;
+
+        if (orderMethod === 'Delivery') {
+            msg += `${n}📦 ${b}DELIVERY DETAILS${b}${n}`;
+            msg += `  • Name: ${dName}${n}`;
+            msg += `  • Phone: ${dNumber}${n}`;
+            msg += `  • Location: ${dLocation}${n}`;
+        }
+
+        msg += `${n}Please let me know the next steps. Thank you!`;
+
+        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
     // ---- Toast ----
@@ -2382,16 +2465,67 @@
     let adminAuthenticated = false;
     let adminEditingIndex = null; // null = adding new
 
-    // products array — seeded with existing static products
-    let products = [
-        { id: 1, name: 'Trench No. 01', price: 210, sizes: ['S','M','L'], images: ['https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=600'], description: '', badge: 'New' },
-        { id: 2, name: 'Silk Slip Dress', price: 145, sizes: ['S','M','L'], images: ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600'], description: '', badge: '' },
-        { id: 3, name: 'Wool Blazer', price: 320, sizes: ['S','M','L'], images: ['https://images.unsplash.com/photo-1594938298603-c8148c4b4730?auto=format&fit=crop&w=600'], description: '', badge: '' },
-        { id: 4, name: 'Ribbed Knit', price: 89, sizes: ['S','M','L'], images: ['https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=600'], description: '', badge: 'Popular' },
-        { id: 5, name: 'Linen Wide Shirt', price: 115, sizes: ['S','M','L','XL'], images: ['https://images.unsplash.com/photo-1551803091-e20673f15770?auto=format&fit=crop&w=600'], description: '', badge: '' },
-        { id: 6, name: '90s Denim Jacket', price: 175, sizes: ['S','M','L'], images: ['https://images.unsplash.com/photo-1542060748-10c28b62716f?auto=format&fit=crop&w=600'], description: '', badge: 'Last Few' }
-    ];
-    let nextId = 7;
+    // ---- Firestore-backed products ----
+    let products = [];
+    let nextId = 1;
+    let firestoreReady = false;
+
+    // Show loading state immediately
+    (function showLoadingState() {
+        const grid = document.getElementById('products-grid');
+        if (grid) grid.innerHTML = '<p style="font-size:0.7rem;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;padding:2rem;">Loading products...</p>';
+        const featGrid = document.getElementById('home-featured-grid');
+        if (featGrid) featGrid.innerHTML = '';
+    })();
+
+    // Load from Firestore as soon as Firebase is ready
+    (function waitForFirestore() {
+        if (window._loadProductsFromFirestore) {
+            window._loadProductsFromFirestore().then(loaded => {
+                firestoreReady = true;
+                // Always use Firestore result — even if empty
+                products = loaded || [];
+                if (products.length > 0) {
+                    nextId = Math.max(...products.map(p => p.id || 0)) + 1;
+                }
+                renderCollection();
+                renderHomeFeatured();
+            }).catch(err => {
+                console.error('Failed to load from Firestore:', err);
+                firestoreReady = true;
+                products = [];
+                renderCollection();
+                renderHomeFeatured();
+            });
+        } else {
+            setTimeout(waitForFirestore, 100);
+        }
+    })();
+
+    async function fsAddProduct(data) {
+        if (!window._db) return null;
+        const ref = await window._firestoreAddDoc(
+            window._firestoreCollection(window._db, 'products'),
+            { ...data, createdAt: window._firestoreTimestamp() }
+        );
+        return ref.id;
+    }
+
+    async function fsUpdateProduct(docId, data) {
+        if (!window._db || !docId) return;
+        await window._firestoreSetDoc(
+            window._firestoreDoc(window._db, 'products', docId),
+            { ...data, updatedAt: window._firestoreTimestamp() },
+            { merge: true }
+        );
+    }
+
+    async function fsDeleteProduct(docId) {
+        if (!window._db || !docId) return;
+        await window._firestoreDeleteDoc(
+            window._firestoreDoc(window._db, 'products', docId)
+        );
+    }
 
     function openAdminPanel() {
         document.getElementById('admin-overlay').classList.add('open');
@@ -2476,7 +2610,7 @@
         }
     }
 
-    function adminSaveItem() {
+    async function adminSaveItem() {
         const name = document.getElementById('af-name').value.trim();
         const price = parseFloat(document.getElementById('af-price').value);
         if (!name) { showToast('Product name is required'); return; }
@@ -2486,15 +2620,30 @@
         const images = getImageUrls();
         const desc = document.getElementById('af-desc').value.trim();
 
-        if (adminEditingIndex !== null) {
-            // Edit existing
-            products[adminEditingIndex] = { ...products[adminEditingIndex], name, price, sizes, images, description: desc };
-            showToast('Item updated');
-        } else {
-            // Add new
-            products.push({ id: nextId++, name, price, sizes, images, description: desc, badge: '' });
-            showToast('Item added');
+        const saveBtn = document.getElementById('admin-save-btn');
+        saveBtn.textContent = 'Saving...';
+        saveBtn.disabled = true;
+
+        try {
+            if (adminEditingIndex !== null) {
+                const existing = products[adminEditingIndex];
+                const updated = { ...existing, name, price, sizes, images, description: desc };
+                await fsUpdateProduct(existing._docId, { name, price, sizes, images, description: desc, badge: existing.badge || '', id: existing.id });
+                products[adminEditingIndex] = updated;
+                showToast('Item updated ✓');
+            } else {
+                const newProduct = { id: nextId++, name, price, sizes, images, description: desc, badge: '' };
+                const docId = await fsAddProduct(newProduct);
+                products.push({ ...newProduct, _docId: docId });
+                showToast('Item added ✓');
+            }
+        } catch(e) {
+            console.error('Firestore save error:', e);
+            showToast('Save failed — check connection');
         }
+
+        saveBtn.textContent = adminEditingIndex !== null ? 'Update Item' : 'Save Item';
+        saveBtn.disabled = false;
 
         renderCollection();
         renderHomeFeatured();
@@ -2533,14 +2682,20 @@
         document.getElementById('admin-modal').scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    function adminDeleteItem(index) {
+    async function adminDeleteItem(index) {
         if (!confirm('Delete "' + products[index].name + '"? This cannot be undone.')) return;
-        products.splice(index, 1);
-        renderCollection();
-        renderHomeFeatured();
-        renderAdminList();
-        if (adminEditingIndex === index) adminCancelEdit();
-        showToast('Item deleted');
+        try {
+            await fsDeleteProduct(products[index]._docId);
+            products.splice(index, 1);
+            renderCollection();
+            renderHomeFeatured();
+            renderAdminList();
+            if (adminEditingIndex === index) adminCancelEdit();
+            showToast('Item deleted ✓');
+        } catch(e) {
+            console.error('Firestore delete error:', e);
+            showToast('Delete failed — check connection');
+        }
     }
 
     function renderAdminList() {
@@ -2569,6 +2724,10 @@
     function renderCollection() {
         const grid = document.getElementById('products-grid');
         if (!grid) return;
+        if (products.length === 0) {
+            grid.innerHTML = '<p style="font-size:0.7rem;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;padding:2rem;grid-column:1/-1;">No products available.</p>';
+            return;
+        }
         grid.innerHTML = products.map((p, i) => {
             const img = p.images && p.images[0] ? p.images[0] : 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600';
             const sizes = p.sizes && p.sizes.length ? p.sizes : [];
@@ -2586,7 +2745,7 @@
                         <option value="">Select Size</option>
                         ${sizes.map(s => `<option value="${s}">${s}</option>`).join('')}
                     </select>` : `<select id="${sizeId}"><option value="">One Size</option></select>`}
-                    <button class="add-btn" onclick="addToCart('${p.name.replace(/'/g,"\\'")}', ${p.price}, '${sizeId}')">Add to Bag</button>
+                    <button class="add-btn" onclick="addToCart('${p.name.replace(/'/g,"\\'")}', ${p.price}, '${sizeId}', '${img}')">Add to Bag</button>
                 </div>
             </div>`;
         }).join('');
@@ -2613,10 +2772,7 @@
     document.getElementById('admin-overlay').addEventListener('click', function(e) {
         if (e.target === this) closeAdminPanel();
     });
-
-    // Initial render
-    renderCollection();
-    renderHomeFeatured();
+    // Products are rendered after Firestore loads (see waitForFirestore above)
 
     function resetForm() {
         document.getElementById('f-first').value = '';
